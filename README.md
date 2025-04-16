@@ -1,9 +1,7 @@
 <p align="center">
     <img src="/migrate-mongo-logo.png" alt="migrate-mongo database migration tool for Node.js"/>
 
-[![Build Status](https://img.shields.io/travis/seppevs/migrate-mongo.svg?style=flat)](https://travis-ci.org/seppevs/migrate-mongo) [![Coverage Status](https://coveralls.io/repos/github/seppevs/migrate-mongo/badge.svg?branch=master)](https://coveralls.io/r/seppevs/migrate-mongo) [![NPM](https://img.shields.io/npm/v/migrate-mongo.svg?style=flat)](https://www.npmjs.org/package/migrate-mongo) [![Downloads](https://img.shields.io/npm/dm/migrate-mongo.svg?style=flat)](https://www.npmjs.org/package/migrate-mongo) [![Dependencies](https://david-dm.org/seppevs/migrate-mongo.svg)](https://david-dm.org/seppevs/migrate-mongo) [![Known Vulnerabilities](https://snyk.io/test/github/seppevs/migrate-mongo/badge.svg)](https://snyk.io/test/github/seppevs/migrate-mongo)
-
-[![tippin.me](https://badgen.net/badge/%E2%9A%A1%EF%B8%8Ftippin.me/@seppevs/F0918E)](https://tippin.me/@seppevs)
+[![Coverage Status](https://coveralls.io/repos/github/seppevs/migrate-mongo/badge.svg?branch=master)](https://coveralls.io/r/seppevs/migrate-mongo) [![NPM](https://img.shields.io/npm/v/migrate-mongo.svg?style=flat)](https://www.npmjs.org/package/migrate-mongo) [![Downloads](https://img.shields.io/npm/dm/migrate-mongo.svg?style=flat)](https://www.npmjs.org/package/migrate-mongo) [![Known Vulnerabilities](https://snyk.io/test/github/seppevs/migrate-mongo/badge.svg)](https://snyk.io/test/github/seppevs/migrate-mongo)
 
 migrate-mongo is a database migration tool for MongoDB running in Node.js 
 
@@ -85,6 +83,12 @@ module.exports = {
   // Enable the algorithm to create a checksum of the file contents and use that in the comparison to determin
   // if the file should be run.  Requires that scripts are coded to be run multiple times.
   useFileHash: false
+
+  // The mongodb collection where the lock will be created.
+  lockCollectionName: "changelog_lock",
+
+  // The value in seconds for the TTL index that will be used for the lock. Value of 0 will disable the feature.
+  lockTtl: 0
 };
 ````
 
@@ -105,6 +109,11 @@ Created: migrations/20160608155948-blacklist_the_beatles.js
 A new migration file is created in the 'migrations' directory:
 ````javascript
 module.exports = {
+  /**
+   * @param db {import('mongodb').Db}
+   * @param client {import('mongodb').MongoClient}
+   * @returns {Promise<void>}
+   */
   up(db, client) {
     // TODO write your migration here. Return a Promise (and/or use async & await).
     // See https://github.com/seppevs/migrate-mongo/#creating-a-new-migration-script
@@ -112,6 +121,11 @@ module.exports = {
     // return db.collection('albums').updateOne({artist: 'The Beatles'}, {$set: {blacklisted: true}});
   },
 
+  /**
+   * @param db {import('mongodb').Db}
+   * @param client {import('mongodb').MongoClient}
+   * @returns {Promise<void>}
+   */
   down(db, client) {
     // TODO write the statements to rollback your migration (if possible)
     // Example:
@@ -131,7 +145,7 @@ There are 3 options to implement the `up` and `down` functions of your migration
 
 Always make sure the implementation matches the function signature:
 * `function up(db, client) { /* */ }` should return `Promise`
-* `function async up(db, client) { /* */ }` should contain `await` keyword(s) and return `Promise`
+* `async function up(db, client) { /* */ }` should contain `await` keyword(s) and return `Promise`
 * `function up(db, client, next) { /* */ }` should callback `next`
 
 #### Example 1: Return a Promise
@@ -235,6 +249,12 @@ $ migrate-mongo status
 └─────────────────────────────────────────┴────────────┘
 ````
 
+#### Migrate down all scripts from a same migration
+With the flag -b (--block), migrate-mongo will revert all scripts of the last migration.
+````bash
+$ migrate-mongo down -b
+````
+
 ## Advanced Features
 
 ### Using a custom config file
@@ -308,8 +328,8 @@ module.exports = {
     const session = client.startSession();
     try {
         await session.withTransaction(async () => {
-            await db.collection('albums').updateOne({artist: 'The Beatles'}, {$set: {blacklisted: true}});
-            await db.collection('albums').updateOne({artist: 'The Doors'}, {$set: {stars: 5}});
+            await db.collection('albums').updateOne({artist: 'The Beatles'}, {$set: {blacklisted: true}}, {session});
+            await db.collection('albums').updateOne({artist: 'The Doors'}, {$set: {stars: 5}}, {session});
         });
     } finally {
       await session.endSession();
@@ -320,8 +340,8 @@ module.exports = {
     const session = client.startSession();
     try {
         await session.withTransaction(async () => {
-            await db.collection('albums').updateOne({artist: 'The Beatles'}, {$set: {blacklisted: false}});
-            await db.collection('albums').updateOne({artist: 'The Doors'}, {$set: {stars: 0}});
+            await db.collection('albums').updateOne({artist: 'The Beatles'}, {$set: {blacklisted: false}}, {session});
+            await db.collection('albums').updateOne({artist: 'The Doors'}, {$set: {stars: 0}}, {session});
         });
     } finally {
       await session.endSession();

@@ -1,7 +1,8 @@
 #! /usr/bin/env node
 
 const program = require("commander");
-const _ = require("lodash");
+const _isEmpty = require("lodash.isempty");
+const _values = require("lodash.values");
 const Table = require("cli-table3");
 const migrateMongo = require("../lib/migrate-mongo");
 const pkgjson = require("../package.json");
@@ -20,8 +21,8 @@ function handleError(err) {
 function printStatusTable(statusItems) {
   return migrateMongo.config.read().then(config => {
     const useFileHash = config.useFileHash === true;
-    const table = new Table({ head: useFileHash ? ["Filename", "Hash", "Applied At"] : ["Filename", "Applied At"]});
-    statusItems.forEach(item => table.push(_.values(item)));
+    const table = new Table({ head: useFileHash ? ["Filename", "Hash", "Applied At", "Migration block"] : ["Filename", "Applied At", "Migration block"]});
+    statusItems.forEach(item => table.push(_values(item)));
     console.log(table.toString());
   })
   
@@ -58,6 +59,9 @@ program
           console.log(`Created: ${config.migrationsDir}/${fileName}`);
         })
       )
+      .then(() => {
+        process.exit(0);
+      })
       .catch(err => handleError(err));
   });
 
@@ -72,6 +76,8 @@ program
       .then(({db, client}) => migrateMongo.up(db, client))
       .then(migrated => {
         printMigrated(migrated);
+      })
+      .then(() => {
         process.exit(0);
       })
       .catch(err => {
@@ -84,6 +90,7 @@ program
   .command("down")
   .description("undo the last applied database migration")
   .option("-f --file <file>", "use a custom config file")
+  .option("-b --block", "rollback all scripts from the same migration block")
   .action(options => {
     global.options = options;
     migrateMongo.database
@@ -93,6 +100,8 @@ program
         migrated.forEach(migratedItem => {
           console.log(`MIGRATED DOWN: ${migratedItem}`);
         });
+      })
+      .then(() => {
         process.exit(0);
       })
       .catch(err => {
@@ -120,6 +129,6 @@ program
 
 program.parse(process.argv);
 
-if (_.isEmpty(program.rawArgs)) {
+if (_isEmpty(program.rawArgs)) {
   program.outputHelp();
 }
